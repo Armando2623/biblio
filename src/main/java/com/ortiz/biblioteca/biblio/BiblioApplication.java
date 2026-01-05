@@ -1,13 +1,21 @@
 package com.ortiz.biblioteca.biblio;
 
+import com.ortiz.biblioteca.biblio.principal.Principal;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class BiblioApplication {
+public class BiblioApplication implements CommandLineRunner {
 
 	public static void main(String[] args) {
 		SpringApplication.run(BiblioApplication.class, args);
 	}
+    @Override
+    public void run(String... args) throws Exception {
+        Principal principal = new Principal();
+        principal.muestraMenu();
 
+
+    }
 }
