@@ -2,67 +2,141 @@ package com.ortiz.biblioteca.biblio.principal;
 
 
 
-import com.ortiz.biblioteca.biblio.model.Datos;
-import com.ortiz.biblioteca.biblio.model.DatosLibros;
+import com.ortiz.biblioteca.biblio.model.*;
+import com.ortiz.biblioteca.biblio.repository.IOAutor;
+import com.ortiz.biblioteca.biblio.repository.IOLibro;
 import com.ortiz.biblioteca.biblio.service.APIconsumo;
 import com.ortiz.biblioteca.biblio.service.ConvierteDatos;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
-import java.util.Comparator;
-import java.util.DoubleSummaryStatistics;
-import java.util.Optional;
-import java.util.Scanner;
+import java.util.*;
 import java.util.stream.Collectors;
 
-public class Principal{
-private static final String Url_Base="https://gutendex.com/books/";
-private APIconsumo consumoAPI = new APIconsumo();
-private ConvierteDatos convierteDatos = new ConvierteDatos();
-private Scanner teclado =new Scanner(System.in);
+@Component
+public class Principal {
+    private static final String Url_Base = "https://gutendex.com/books/";
+    private APIconsumo consumoAPI = new APIconsumo();
+    private ConvierteDatos convierteDatos = new ConvierteDatos();
+    private Scanner teclado = new Scanner(System.in);
+    private IOLibro repoLibro;
+    private IOAutor repoAutor;
+    private List<Libro> libros;
+    private List<Autor> autores;
 
-public void muestraMenu(){
-    var json = consumoAPI.obtenerDatos(Url_Base);
-    System.out.println(json);
-    var datos = convierteDatos.obtenerDatos(json, Datos.class);
-    System.out.println(datos);
-
-
-
-    //top 10 libros mas descargados
-    System.out.println("Top 10 libros mas descargados");
-
-    datos.librosList().stream()
-            .sorted(Comparator.comparing(DatosLibros::numeroDescargas).reversed())
-            .limit(10)
-            .map(l->l.titulo().toUpperCase())
-            .forEach(System.out::println);
-
-
-    //busqueda por nombre
-    System.out.println("Ingrese el nombre para buscar el libro");
-    var tituloLibro = teclado.nextLine();
-    json = consumoAPI.obtenerDatos(Url_Base+"?search=" + tituloLibro.replace(" ", "+"));
-    var datosbusqueda = convierteDatos.obtenerDatos(json, Datos.class);
-    Optional<DatosLibros> librosBuscados = datosbusqueda.librosList().stream()
-            .filter(l->l.titulo().toUpperCase().contains(tituloLibro.toUpperCase()))
-            .findFirst();
-    if (librosBuscados.isPresent()){
-        System.out.println("Libro encontrado");
-        System.out.println(librosBuscados.get());
-
-    }else {
-        System.out.println("Libro no encontrado");
+    @Autowired
+    public Principal(IOLibro ioLibro, IOAutor ioAutor){
+    this.repoLibro = ioLibro;
+    this.repoAutor = ioAutor;
     }
 
 
-    //trabajanod con estadisticas
-    DoubleSummaryStatistics est = datosbusqueda.librosList().stream()
-            .filter(d->d.numeroDescargas()>8)
-            .collect(Collectors.summarizingDouble(DatosLibros::numeroDescargas));
-    System.out.println("Cantidad de descargas" + est.getAverage());
-    System.out.println("Cantidad maxima de descargas" + est.getMax());
-    System.out.println("Cantidad minima de descargas" + est.getMin());
-    System.out.println("Cantidad de registros evaluados" + est.getCount());
-}
+    public void muestraMenu() {
+        var json = consumoAPI.obtenerDatos(Url_Base);
+        System.out.println(json);
+        var datos = convierteDatos.obtenerDatos(json, Datos.class);
+        System.out.println(datos);
+
+        var opcion = -1;
+        while (opcion != 0) {
+            var menu = """
+                    1 - Buscar libro por titulo
+                    2 - Buscar libros registrados
+                    3 - Listar autores de libros
+                    4 - Listar autores vivos en un determinado año
+                    0 - salir
+                    """;
+            System.out.println(menu);
+            opcion = teclado.nextInt();
+            teclado.nextLine();
+
+            switch (opcion) {
+                case 1:
+                    buscarLibro();
+                    break;
+                case 2:
+                    librosRegistrados();
+                    break;
+                case 3:
+                    AutoresLibros();
+                    break;
+                case 4:
+                    autoresAño();
+                    break;
+
+            }
+        }
 
 
+    }
+
+    private void buscarLibro() {
+        DatosLibros datos = getDatos();
+        Libro libro = new Libro(datos);
+            List<Autor> autores = datos.autor().stream()
+                            .map(Autor::new)
+                                    .toList();
+            libro.setAutor(autores);
+
+        repoLibro.save(libro);
+        System.out.println(datos);
+
+
+
+    }
+
+    private void librosRegistrados() {
+        libros = repoLibro.findAll();
+
+        libros.stream()
+                        .forEach(System.out::println);
+
+    }
+
+    private void AutoresLibros() {
+       libros = repoLibro.findAllConAutores();
+       autores = libros.stream()
+               .filter(l->l.getAutor()!= null)
+               .flatMap(l->l.getAutor().stream())
+               .toList();
+        autores.forEach(a-> System.out.println(a.getNombre()
+        + " - " + a.getLibro().getTitulo()));
+
+    }
+
+    private void autoresAño() {
+        System.out.println("Ingrese el año del autor");
+        var anio = teclado.nextLine();
+
+autores = repoAutor.findAño(anio);
+autores.forEach(a-> System.out.println(a.getNombre()));
+    }
+
+    private void librosIdioma() {
+
+    }
+
+
+    private DatosLibros getDatos() {
+        System.out.println("Ingrese el nombre para buscar el libro");
+        var tituloLibro = teclado.nextLine();
+        var json = consumoAPI.obtenerDatos(Url_Base + "?search=" + tituloLibro.replace(" ", "+"));
+        System.out.println(json);
+        var datosbusqueda= convierteDatos.obtenerDatos(json, Datos.class);
+
+        Optional<DatosLibros> librosBuscados = datosbusqueda.librosList().stream()
+                .filter(l -> l.titulo().toUpperCase().contains(tituloLibro.toUpperCase()))
+                .findFirst();
+        if (librosBuscados.isPresent()) {
+            System.out.println("Libro encontrado");
+           // System.out.println(librosBuscados.get());
+            return librosBuscados.get();
+
+        } else {
+            System.out.println("Libro no encontrado");
+            return null;
+        }
+
+    }
 }
+
